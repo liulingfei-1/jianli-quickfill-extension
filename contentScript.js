@@ -1109,7 +1109,7 @@ ${value}`.toLowerCase();
     if (host.contains(t)) return; // 忽略面板内部
     if (isSelectLike(t)) {
       pushLog('info', '检测到下拉选择控件，关闭建议以免遮挡', { tag: t.tagName, type: t.getAttribute?.('type') });
-      closeSuggest();
+      closeSuggest({ suppress: true });
       suppressSuggestionUntil = Date.now() + 800;
       return;
     }
@@ -1780,19 +1780,27 @@ ${value}`.toLowerCase();
     const key = suggestItems[i].key;
     const val = bucket[key] ?? '';
     if (suggestTarget) fillValue(suggestTarget, val);
-    closeSuggest();
+    closeSuggest({ suppress: true });
   }
 
-  function closeSuggest(){
+  function closeSuggest(options = {}){
+    const { suppress = false } = options;
     if (!suggestBox) return;
     suggestBox.classList.remove('visible');
-    if (suggestHost) suggestHost.style.pointerEvents = 'none';
+    if (suggestHost) {
+      suggestHost.style.pointerEvents = 'none';
+      suggestHost.style.left = '-9999px';
+      suggestHost.style.top = '-9999px';
+    }
     suggestItems = [];
     suggestIndex = -1;
     if (!aiLoading) {
       suggestTarget = null;
     }
     if (repositionTimer) { cancelAnimationFrame(repositionTimer); repositionTimer = null; }
+    if (suppress) {
+      suppressSuggestionUntil = Date.now() + 600;
+    }
   }
 
   function scheduleReposition(){
@@ -2174,7 +2182,7 @@ ${value}`.toLowerCase();
     const quickResult = resolveQuickFill(target, ctx, typed, maxLength);
     if (quickResult) {
       fillValue(target, quickResult.value ?? '');
-      closeSuggest();
+      closeSuggest({ suppress: true });
       setAiStatus(quickResult.message || '已填入匹配内容。', 'success', 2200);
       pushLog('info', 'AI 快速填充命中', quickResult);
       return;
