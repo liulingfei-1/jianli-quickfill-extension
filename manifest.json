@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "简历填写助手（键值库）",
+  "name": "简历快填助手",
   "description": "用键值对保存常用简历内容，一键填入网页表单。",
   "version": "1.0.0",
   "permissions": [
@@ -13,7 +13,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "简历填写助手"
+    "default_title": "简历快填助手"
   },
   "content_scripts": [
     {
