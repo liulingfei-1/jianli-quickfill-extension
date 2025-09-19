@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "简历填写助手（键值库）",
+  "description": "用键值对保存常用简历内容，一键填入网页表单。",
+  "version": "1.0.0",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://dashscope.aliyuncs.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "简历填写助手"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentScript.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
