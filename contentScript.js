@@ -1890,6 +1890,69 @@ ${value}`.toLowerCase();
     }
   }, true);
 
+  const STRONG_KEY_PATTERNS = [
+    { key: '邮箱', patterns: ['邮箱', 'email', 'e-mail', 'mail'] },
+    { key: '手机', patterns: ['手机号', '手机号码', '手机', 'mobile', 'telephone', 'tel', 'phone', '联系电话'] },
+    { key: '身份证号', patterns: ['身份证', 'idcard', 'id card', '证件号'] },
+    { key: '姓名', patterns: ['姓名', 'name', 'full name', '真实姓名'] }
+  ];
+
+  function extractStrongKey(text) {
+    if (!text) return null;
+    const normalized = text.toLowerCase();
+    const hits = STRONG_KEY_PATTERNS.filter((entry) =>
+      entry.patterns.some((pattern) => pattern && normalized.includes(pattern))
+    );
+    if (hits.length === 1) {
+      return hits[0].key;
+    }
+    return null;
+  }
+
+  function detectStrongKey(target, attrParts, labelTexts, nearby, typedLower) {
+    const candidates = [];
+    const pushCandidate = (text) => {
+      if (!text) return;
+      const normalized = String(text).toLowerCase().trim();
+      if (normalized) candidates.push(normalized);
+    };
+
+    // 高优先级：显式的输入类型和输入模式
+    const typeAttr = target.getAttribute?.('type')?.toLowerCase();
+    if (typeAttr === 'email') return '邮箱';
+    if (typeAttr === 'tel' || typeAttr === 'phone') return '手机';
+    const inputMode = target.getAttribute?.('inputmode')?.toLowerCase();
+    if (inputMode === 'email') return '邮箱';
+    if (inputMode === 'tel' || inputMode === 'numeric') {
+      if (typedLower && typedLower.replace(/[^0-9]/g, '').length >= 7) return '手机';
+    }
+
+    if (typedLower) {
+      if (typedLower.includes('@')) return '邮箱';
+      if (typedLower.replace(/[^0-9]/g, '').length >= 7) return '手机';
+    }
+
+    if (Array.isArray(labelTexts) && labelTexts.length) {
+      const sortedLabels = [...labelTexts].sort((a, b) => (b.weight || 0) - (a.weight || 0));
+      sortedLabels.forEach((entry) => pushCandidate(entry.text));
+    }
+    if (Array.isArray(nearby) && nearby.length) {
+      nearby.forEach((entry) => pushCandidate(entry.text));
+    }
+    pushCandidate(target.getAttribute?.('placeholder'));
+    pushCandidate(target.getAttribute?.('aria-label'));
+    pushCandidate(target.getAttribute?.('name'));
+    pushCandidate(target.getAttribute?.('id'));
+    pushCandidate(attrParts);
+    pushCandidate(typedLower);
+
+    for (const text of candidates) {
+      const forced = extractStrongKey(text);
+      if (forced) return forced;
+    }
+    return null;
+  }
+
   function resolveQuickFill(target, ctx, typed, maxLength) {
     if (!target) return null;
     const attrParts = [
@@ -1903,19 +1966,31 @@ ${value}`.toLowerCase();
     const typedLower = (typed || '').toLowerCase();
     const labelTexts = collectLabelTexts(target);
     const nearby = collectNearbyTexts(target);
+
+    const forcedKey = detectStrongKey(target, attrParts, labelTexts, nearby, typedLower);
+    if (forcedKey && bucket[forcedKey] !== undefined) {
+      pushLog('info', '快速填充强匹配', { key: forcedKey });
+      return {
+        key: forcedKey,
+        value: bucket[forcedKey],
+        reason: `strong:${forcedKey}`,
+        message: `已填入“${forcedKey}”`
+      };
+    }
+
     const contextSegments = [];
     const pushSegment = (text, weight, source) => {
       if (!text) return;
       const normalized = text.toLowerCase().replace(/\s+/g, ' ').trim();
       if (!normalized) return;
-    contextSegments.push({ text: normalized, weight, source });
-  };
-  pushSegment(attrParts, 6, 'attr');
-  pushSegment(typedLower, 6, 'typed');
-  pushSegment(ctx ? ctx.toLowerCase() : '', 7, 'context');
-  labelTexts.forEach((entry, index) => pushSegment(entry.text.toLowerCase(), entry.weight, entry.source));
-  nearby.forEach((entry, index) => pushSegment(entry.text.toLowerCase(), 5 - index, `nearby-${index}`));
-  const textByAncestry = [];
+      contextSegments.push({ text: normalized, weight, source });
+    };
+    pushSegment(attrParts, 6, 'attr');
+    pushSegment(typedLower, 6, 'typed');
+    pushSegment(ctx ? ctx.toLowerCase() : '', 7, 'context');
+    labelTexts.forEach((entry, index) => pushSegment(entry.text.toLowerCase(), entry.weight, entry.source));
+    nearby.forEach((entry, index) => pushSegment(entry.text.toLowerCase(), 5 - index, `nearby-${index}`));
+    const textByAncestry = [];
     let node = target.parentElement;
     let depth = 0;
     while (node && node !== document.body && depth < 5) {
@@ -1927,11 +2002,11 @@ ${value}`.toLowerCase();
     textByAncestry.forEach((entry) => pushSegment(entry.text, entry.weight, entry.source));
     const typedDigits = typedLower.replace(/[^0-9]/g, '');
     if (typedDigits.length >= 7) contextSegments.push({ text: 'phone', weight: 10, source: 'typed-digits' });
-  const logPreview = contextSegments.slice(0, 6).map((seg) => ({ source: seg.source, snippet: seg.text.slice(0, 80), weight: seg.weight }));
-  pushLog('info', '快速填充上下文', {
-    segments: logPreview,
-    maxLength
-  });
+    const logPreview = contextSegments.slice(0, 6).map((seg) => ({ source: seg.source, snippet: seg.text.slice(0, 80), weight: seg.weight }));
+    pushLog('info', '快速填充上下文', {
+      segments: logPreview,
+      maxLength
+    });
 
     const keywordScore = (keywords) => {
       let total = 0;
@@ -2099,6 +2174,7 @@ ${value}`.toLowerCase();
     const quickResult = resolveQuickFill(target, ctx, typed, maxLength);
     if (quickResult) {
       fillValue(target, quickResult.value ?? '');
+      closeSuggest();
       setAiStatus(quickResult.message || '已填入匹配内容。', 'success', 2200);
       pushLog('info', 'AI 快速填充命中', quickResult);
       return;
