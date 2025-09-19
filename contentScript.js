@@ -119,6 +119,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const debugLogs = [];
   let aiResumeText = '';
   let suppressSuggestionUntil = 0;
+  let manualSuggestSuppressUntil = 0;
 
   // 容器 + Shadow DOM，避免样式冲突
   const host = document.createElement('div');
@@ -1110,7 +1111,9 @@ ${value}`.toLowerCase();
     if (isSelectLike(t)) {
       pushLog('info', '检测到下拉选择控件，关闭建议以免遮挡', { tag: t.tagName, type: t.getAttribute?.('type') });
       closeSuggest({ suppress: true });
-      suppressSuggestionUntil = Date.now() + 800;
+      const now = Date.now();
+      suppressSuggestionUntil = now + 800;
+      manualSuggestSuppressUntil = now + 800;
       return;
     }
     if (isTextInput(t)) {
@@ -1708,6 +1711,11 @@ ${value}`.toLowerCase();
       return;
     }
     if (!settings.autoSuggestEnabled) { closeSuggest(); return; }
+    const now = Date.now();
+    if (now < manualSuggestSuppressUntil) {
+      pushLog('info', '当前处于手动抑制期，跳过建议打开');
+      return;
+    }
     ensureSuggestUI();
     suggestTarget = el;
     pushLog('info', '打开建议列表', {
@@ -1799,7 +1807,10 @@ ${value}`.toLowerCase();
     }
     if (repositionTimer) { cancelAnimationFrame(repositionTimer); repositionTimer = null; }
     if (suppress) {
-      suppressSuggestionUntil = Date.now() + 600;
+      const now = Date.now();
+      const delay = Math.max(manualSuggestSuppressUntil - now, 600);
+      suppressSuggestionUntil = now + delay;
+      manualSuggestSuppressUntil = now + delay;
     }
   }
 
@@ -1887,13 +1898,15 @@ ${value}`.toLowerCase();
       }
       if (path.some((node) => node instanceof HTMLElement && isSelectLike(node))) {
         pushLog('info', '点击下拉控件，关闭建议避免遮挡');
-        closeSuggest();
-        suppressSuggestionUntil = Date.now() + 800;
+        closeSuggest({ suppress: true });
+        const now = Date.now();
+        suppressSuggestionUntil = now + 800;
+        manualSuggestSuppressUntil = now + 800;
         return;
       }
       if (suggestTarget && !suggestTarget.contains(t)) {
         // 粗略关闭，若实际点在建议上，click 选择后也会关闭
-        setTimeout(()=>closeSuggest(), 0);
+        setTimeout(()=>closeSuggest({ suppress: true }), 0);
       }
     }
   }, true);
