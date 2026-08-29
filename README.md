@@ -45,3 +45,6 @@ npm test
 2. 登录 [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole/)。
 3. 创建新项目并上传压缩包，补充说明与隐私政策，通过审核后即可分发。
 
+## 开源许可证
+
+项目采用 [MIT License](LICENSE)。

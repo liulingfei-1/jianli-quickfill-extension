@@ -2,6 +2,7 @@
   "name": "resume-helper-extension",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "test": "node tests/run-tests.js"
